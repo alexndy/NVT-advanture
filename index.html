@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>滷肉大冒險 Ver 1.00</title>
+    <title>滷肉大冒險 Ver 1.01</title>
     <style>
         body {
             margin: 0;
             height: 100dvh;
             background-color: #222;
-            font-family: "Microsoft JhengHei", "Heiti TC", sans-serif; /* 預設字體 */
+            font-family: "Microsoft JhengHei", "Heiti TC", sans-serif;
             overflow: hidden;
             touch-action: none;
             display: flex;
@@ -57,7 +57,7 @@
             color: white;
             border: 2px solid white;
             border-radius: 15px;
-            font-size: 24px; /* 按鈕字體也稍微加大 */
+            font-size: 24px;
             padding: 10px;
             min-width: 80px;
             height: 80px;
@@ -94,23 +94,19 @@
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const GAME_VERSION = "Ver 1.00";
-const SCALE = 1.2; // 全局縮放比例：1.2倍
+const GAME_VERSION = "Ver 1.01";
+const SCALE = 1.2; 
 
-// --- 圖片產生器 (自動應用縮放) ---
+// --- 圖片產生器 ---
 function createCharacterSprite(color, w, h, type) {
     const c = document.createElement('canvas');
-    // 畫布尺寸放大
     c.width = w * SCALE;
     c.height = h * SCALE;
     const x = c.getContext('2d');
-    
-    // 繪圖座標放大
     x.scale(SCALE, SCALE);
     
-    // 以下繪圖指令維持原比例，scale 會自動處理放大
-    x.fillStyle = color; x.fillRect(5, 20, w - 10, h - 20); // 身體
-    x.fillStyle = '#FFCC99'; x.beginPath(); x.arc(w/2, 15, 12, 0, Math.PI * 2); x.fill(); // 頭
+    x.fillStyle = color; x.fillRect(5, 20, w - 10, h - 20); 
+    x.fillStyle = '#FFCC99'; x.beginPath(); x.arc(w/2, 15, 12, 0, Math.PI * 2); x.fill();
 
     if (type === 'bolun') {
         x.strokeStyle = 'black'; x.lineWidth = 2;
@@ -154,7 +150,6 @@ function createItemSprite(type) {
     return c;
 }
 
-// 基礎尺寸維持不變，由 createCharacterSprite 內部乘上 SCALE
 const images = {
     leo: createCharacterSprite('blue', 40, 60, 'leo'),
     richard: createCharacterSprite('#FF6347', 40, 50, 'normal'),
@@ -213,13 +208,11 @@ setupTouchButton('btnRight', 'right');
 setupTouchButton('btnJump', 'up', true);
 
 // --- 類別定義 ---
-// 注意：所有寬高都使用 image.width/height，這樣會自動套用放大後的尺寸
-
 class Player {
     constructor() {
         this.image = images.leo;
-        this.width = this.image.width; // 自動變成 40 * 1.2 = 48
-        this.height = this.image.height; // 自動變成 60 * 1.2 = 72
+        this.width = this.image.width; 
+        this.height = this.image.height; 
         this.x = 100;
         this.y = 200;
         this.vy = 0;
@@ -229,13 +222,32 @@ class Player {
         this.invincibleTimer = 0;
     }
     draw() {
-        if (this.invincible) ctx.globalAlpha = (frames % 10 < 5) ? 0.5 : 1.0;
+        // 鬥氣特效
+        if (this.invincible) {
+            ctx.save();
+            // 鬥氣發光設定
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'gold';
+            ctx.fillStyle = `rgba(255, 215, 0, ${0.4 + Math.sin(frames * 0.2) * 0.2})`; // 閃爍的半透明金黃色
+            
+            // 鬥氣範圍 (比身體大 1/4)
+            const auraMargin = this.width * 0.25;
+            const auraX = this.x - auraMargin;
+            const auraY = this.y - auraMargin;
+            const auraW = this.width + auraMargin * 2;
+            const auraH = this.height + auraMargin * 2;
+
+            // 畫出不規則燃燒感
+            ctx.beginPath();
+            ctx.ellipse(this.x + this.width/2, this.y + this.height/2, auraW/2, auraH/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
         ctx.drawImage(this.image, this.x, this.y);
-        ctx.globalAlpha = 1.0;
         
-        // 名字放大
         ctx.fillStyle = 'white'; 
-        ctx.font = '16px Arial'; // 放大字體
+        ctx.font = '16px Arial';
         ctx.fillText("里歐", this.x + 5, this.y - 12);
         
         if (this.invincible) {
@@ -253,6 +265,26 @@ class Player {
             this.y = canvas.height - 50 - this.height; this.grounded = true;
         } else { this.grounded = false; }
         if (this.invincible) { this.invincibleTimer--; if (this.invincibleTimer <= 0) this.invincible = false; }
+    }
+    
+    // 取得碰撞箱 (無敵時會變大)
+    getHitbox() {
+        if (this.invincible) {
+            const margin = this.width * 0.25;
+            return {
+                x: this.x - margin,
+                y: this.y - margin,
+                width: this.width + margin * 2,
+                height: this.height + margin * 2
+            };
+        } else {
+            return {
+                x: this.x,
+                y: this.y,
+                width: this.width,
+                height: this.height
+            };
+        }
     }
 }
 
@@ -281,7 +313,7 @@ class Enemy {
     draw() { 
         ctx.drawImage(this.image, this.x, this.y); 
         ctx.fillStyle = 'white'; 
-        ctx.font = '14px Arial'; // 放大字體
+        ctx.font = '14px Arial'; 
         ctx.fillText(this.name, this.x, this.y - 8); 
     }
     update() {
@@ -307,7 +339,7 @@ class Projectile {
     draw() { 
         ctx.drawImage(this.image, this.x, this.y); 
         ctx.fillStyle = 'black'; 
-        ctx.font = '12px Arial'; // 放大字體
+        ctx.font = '12px Arial'; 
         ctx.fillText("麵包", this.x, this.y-5); 
     }
     update() { this.x -= (this.speed + gameSpeed * 0.5); if (this.x < 0) this.markedForDeletion = true; }
@@ -323,7 +355,7 @@ class HeDong {
     draw() { 
         ctx.drawImage(this.image, this.x, this.y); 
         ctx.fillStyle = 'white'; 
-        ctx.font = '14px Arial'; // 放大字體
+        ctx.font = '14px Arial'; 
         ctx.fillText("河董", this.x + 10, this.y - 5); 
     }
     update() {
@@ -338,7 +370,7 @@ class BoLun {
         this.image = images.bolun;
         this.width = this.image.width; this.height = this.image.height;
         this.x = canvas.width / 2 - this.width / 2;
-        this.y = -150; // 稍微高一點
+        this.y = -150;
         this.targetY = 100;
         this.lifeTimer = 600;
         this.markedForDeletion = false;
@@ -347,7 +379,7 @@ class BoLun {
     draw() {
         ctx.drawImage(this.image, this.x, this.y);
         ctx.fillStyle = '#87CEFA'; 
-        ctx.font = 'bold 18px Arial'; // 放大字體
+        ctx.font = 'bold 18px Arial';
         ctx.fillText("伯輪", this.x + 10, this.y - 10);
     }
     update() {
@@ -373,7 +405,7 @@ class Rice {
     draw() { 
         ctx.drawImage(this.image, this.x, this.y); 
         ctx.fillStyle = 'white'; 
-        ctx.font = '12px Arial'; // 放大字體
+        ctx.font = '12px Arial'; 
         ctx.fillText("滷肉飯", this.x-2, this.y-5); 
     }
     update() {
@@ -409,20 +441,35 @@ function handleEnemies() {
             let rand = Math.random();
             if (rand < 0.5) enemies.push(new Enemy('Richard')); else if (rand < 0.8) enemies.push(new Enemy('Ping')); else enemies.push(new Enemy('Luo'));
         }
-        
         if (frames % 400 === 0 && Math.random() < 0.6) heDongs.push(new HeDong());
-        
         if (frames % 500 === 0 && Math.random() < 0.3) boLuns.push(new BoLun());
     }
+
+    // 取得主角的判定範圍 (如果是無敵狀態，會取得比較大的鬥氣範圍)
+    const pBox = player.getHitbox();
 
     enemies.forEach((enemy, index) => {
         enemy.draw();
         if (!isTimeFrozen) enemy.update();
-        if (collision(player, enemy)) {
-            if (isTimeFrozen || (player.vy > 0 && player.y + player.height < enemy.y + enemy.height * 0.8)) {
-                enemies.splice(index, 1); player.vy = -8; score += 100;
+        
+        // 使用新的判定範圍 pBox 來檢測碰撞
+        if (collision(pBox, enemy)) {
+            // 情況1: 時間凍結 -> 秒殺
+            // 情況2: 踩到頭 -> 秒殺
+            // 情況3: 無敵狀態 (且敵人碰到了鬥氣範圍) -> 秒殺
+            if (isTimeFrozen || 
+                (player.vy > 0 && player.y + player.height < enemy.y + enemy.height * 0.8) || 
+                player.invincible) {
+                
+                enemies.splice(index, 1); 
+                // 只有在踩頭時才彈跳，如果是用鬥氣掃到的就不彈跳
+                if (player.vy > 0 && player.y + player.height < enemy.y + enemy.height * 0.8 && !player.invincible) {
+                    player.vy = -8; 
+                }
+                score += 100;
             } else {
-                if (player.invincible) enemies.splice(index, 1); else isGameOver = true;
+                // 沒無敵、沒踩頭、沒凍結 -> 玩家死亡
+                isGameOver = true;
             }
         }
         if (enemy.markedForDeletion) enemies.splice(index, 1);
@@ -431,7 +478,8 @@ function handleEnemies() {
     projectiles.forEach((p, index) => {
         p.draw();
         if (!isTimeFrozen) p.update();
-        if (collision(player, p)) {
+        
+        if (collision(pBox, p)) {
             if (!isTimeFrozen && !player.invincible) isGameOver = true;
             else if (player.invincible || isTimeFrozen) projectiles.splice(index, 1);
         }
@@ -463,7 +511,7 @@ function collision(rect1, rect2) {
 }
 
 function drawScore() {
-    ctx.fillStyle = 'black'; ctx.font = '24px Arial'; // 分數也放大
+    ctx.fillStyle = 'black'; ctx.font = '24px Arial'; 
     ctx.fillText('距離分數: ' + Math.floor(score), 20, 35);
     if (player.invincible) { ctx.fillStyle = 'red'; ctx.fillText('無敵時間! 剩餘: ' + Math.floor(player.invincibleTimer/60), 20, 65); }
     if (boLuns.length > 0) {
@@ -477,43 +525,55 @@ function drawStartScreen() {
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.textAlign = 'center';
     
-    // --- 標題風格設計 (卡通字體 + 描邊) ---
     ctx.font = '900 60px "Comic Sans MS", "Chalkboard SE", "cwTeXYen", "Microsoft JhengHei", sans-serif';
     ctx.lineWidth = 8;
-    ctx.strokeStyle = '#8B4513'; // 深咖啡色邊框
+    ctx.strokeStyle = '#8B4513'; 
     ctx.strokeText('滷肉大冒險', canvas.width/2, canvas.height/2 - 60);
-    
-    ctx.fillStyle = '#FFD700'; // 金黃色字體
+    ctx.fillStyle = '#FFD700'; 
     ctx.fillText('滷肉大冒險', canvas.width/2, canvas.height/2 - 60);
     
-    // --- 版本號 ---
     ctx.font = 'italic 20px Arial';
     ctx.fillStyle = '#CCCCCC';
-    ctx.textAlign = 'right'; // 靠右對齊標題
-    // 稍微抓一下位置，放在標題右下方
+    ctx.textAlign = 'right'; 
     ctx.fillText(GAME_VERSION, canvas.width/2 + 160, canvas.height/2 - 40); 
 
-    ctx.textAlign = 'center'; // 恢復置中
+    ctx.textAlign = 'center'; 
     ctx.fillStyle = 'white'; 
     ctx.font = '24px "Microsoft JhengHei"'; 
     ctx.fillText('按 跳躍鍵 開始遊戲', canvas.width/2, canvas.height/2 + 30);
-    
     ctx.textAlign = 'start';
 }
 
 function drawGameOverScreen() {
-    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = 'white'; ctx.textAlign = 'center';
     
+    // 結局文字邏輯
+    let endText = "";
+    let finalScore = Math.floor(score);
+    if (finalScore < 500) {
+        endText = "你已被離職";
+    } else if (finalScore < 1000) {
+        endText = "轉職麥當勞鏟薯條";
+    } else {
+        endText = "股票賺到財富自由 開除老闆";
+    }
+
     ctx.font = '900 50px "Microsoft JhengHei"'; 
-    ctx.fillText('遊戲結束', canvas.width/2, canvas.height/2 - 30);
+    ctx.fillText('遊戲結束', canvas.width/2, canvas.height/2 - 60);
     
+    // 顯示結局評語
+    ctx.fillStyle = '#FF6347'; // 番茄紅
+    ctx.font = 'bold 32px "Microsoft JhengHei"'; 
+    ctx.fillText(endText, canvas.width/2, canvas.height/2);
+
+    ctx.fillStyle = 'white';
     ctx.font = '30px "Microsoft JhengHei"'; 
-    ctx.fillText('最終分數: ' + Math.floor(score), canvas.width/2, canvas.height/2 + 30);
+    ctx.fillText('最終分數: ' + finalScore, canvas.width/2, canvas.height/2 + 50);
     
     ctx.fillStyle = 'yellow'; 
     ctx.font = '28px "Microsoft JhengHei"'; 
-    ctx.fillText('按 跳躍鍵 重新開始', canvas.width/2, canvas.height/2 + 90);
+    ctx.fillText('按 跳躍鍵 重新開始', canvas.width/2, canvas.height/2 + 110);
     ctx.textAlign = 'start';
 }
 
