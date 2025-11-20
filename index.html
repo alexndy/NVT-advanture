@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>滷肉大冒險 - 手機版</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column; /* 改成直向排列 (畫在上，按鈕在下) */
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #222;
+            font-family: "Microsoft JhengHei", sans-serif;
+            overflow: hidden;
+            touch-action: none; /* 防止手機遊覽器預設的縮放或捲動 */
+        }
+        
+        /* 畫布自適應 */
+        canvas {
+            background-color: #87CEEB;
+            border: 2px solid #fff;
+            /* 讓畫布寬度跟隨螢幕，但不超過800px */
+            width: 95%; 
+            max-width: 800px;
+            height: auto; /* 高度依比例縮放 */
+            aspect-ratio: 16/9; /* 維持比例 */
+            display: block;
+        }
+
+        /* 控制區塊 */
+        #controls {
+            display: flex;
+            justify-content: space-between;
+            width: 95%;
+            max-width: 800px;
+            margin-top: 10px;
+            padding-bottom: 10px;
+        }
+
+        /* 按鈕樣式 */
+        .btn-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        button {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 2px solid white;
+            border-radius: 15px;
+            font-size: 24px;
+            padding: 15px;
+            min-width: 80px;
+            height: 80px; /* 讓按鈕夠大好按 */
+            cursor: pointer;
+            user-select: none; /* 防止長按選取文字 */
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        button:active, button.active {
+            background-color: rgba(255, 255, 255, 0.6);
+            color: black;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="800" height="450"></canvas>
+
+<div id="controls">
+    <div class="btn-group">
+        <button id="btnLeft">◀ 左</button>
+        <button id="btnRight">右 ▶</button>
+    </div>
+    <button id="btnJump" style="background-color: rgba(255, 215, 0, 0.3);">跳躍 / 開始</button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- 圖片產生器 (維持原樣) ---
+function createCharacterSprite(color, width, height, type) {
+    const c = document.createElement('canvas');
+    c.width = width; c.height = height;
+    const x = c.getContext('2d');
+    x.fillStyle = color; x.fillRect(5, 20, width - 10, height - 20);
+    x.fillStyle = '#FFCC99'; x.beginPath(); x.arc(width/2, 15, 12, 0, Math.PI * 2); x.fill();
+    x.fillStyle = 'black'; x.fillRect(width/2 - 4, 12, 2, 2); x.fillRect(width/2 + 2, 12, 2, 2);
+
+    if (type === 'leo') {
+        x.fillStyle = 'blue'; x.fillRect(width/2 - 14, 2, 28, 6);
+        x.beginPath(); x.arc(width/2, 5, 12, Math.PI, 0); x.fill();
+    } else if (type === 'hedong') {
+        x.fillStyle = 'white'; x.beginPath(); x.arc(width/2, 20, 10, 0, Math.PI); x.fill();
+    } else if (type === 'ping') {
+        x.fillStyle = color; x.fillRect(0, 25, width, 10);
+    } else if (type === 'luo') {
+        x.fillStyle = 'white'; x.fillRect(width/2 - 12, 8, 24, 4);
+    }
+    return c;
+}
+
+function createItemSprite(type) {
+    const c = document.createElement('canvas');
+    c.width = 30; c.height = 30;
+    const x = c.getContext('2d');
+    if (type === 'bread') {
+        x.fillStyle = '#FFA500'; x.beginPath(); x.ellipse(15, 15, 12, 8, 0, 0, Math.PI*2); x.fill();
+        x.fillStyle = '#8B4513'; x.fillRect(10, 12, 10, 2);
+    } else if (type === 'rice') {
+        x.fillStyle = '#FFFFFF'; x.beginPath(); x.arc(15, 20, 10, 0, Math.PI, true); x.fill();
+        x.fillStyle = '#8B0000'; x.beginPath(); x.arc(15, 20, 10, 0, Math.PI); x.fill();
+        x.fillStyle = '#654321'; x.fillRect(10, 12, 10, 5);
+    }
+    return c;
+}
+
+const images = {
+    leo: createCharacterSprite('blue', 40, 60, 'leo'),
+    richard: createCharacterSprite('#FF6347', 40, 50, 'normal'),
+    ping: createCharacterSprite('#228B22', 50, 50, 'ping'),
+    luo: createCharacterSprite('#800080', 30, 40, 'luo'),
+    hedong: createCharacterSprite('#00CED1', 50, 50, 'hedong'),
+    bread: createItemSprite('bread'),
+    rice: createItemSprite('rice')
+};
+
+// --- 遊戲核心邏輯 ---
+let frames = 0;
+let score = 0;
+let gameSpeed = 4;
+let isGameOver = false;
+let isGameStart = false;
+let gravity = 0.6;
+
+const keys = { right: false, left: false, up: false };
+
+// 統一處理「開始遊戲」的邏輯
+function triggerGameStart() {
+    if (!isGameStart) {
+        isGameStart = true;
+        animate();
+    } else if (isGameOver) {
+        resetGame();
+    }
+}
+
+// 電腦鍵盤監聽
+window.addEventListener('keydown', function(e) {
+    if (e.code === 'ArrowRight') keys.right = true;
+    if (e.code === 'ArrowLeft') keys.left = true;
+    if (e.code === 'Space' || e.code === 'ArrowUp') keys.up = true;
+    if (e.code === 'Space' || e.code === 'Enter') triggerGameStart();
+});
+
+window.addEventListener('keyup', function(e) {
+    if (e.code === 'ArrowRight') keys.right = false;
+    if (e.code === 'ArrowLeft') keys.left = false;
+    if (e.code === 'Space' || e.code === 'ArrowUp') keys.up = false;
+});
+
+// --- 手機觸控按鈕邏輯 ---
+function setupTouchButton(id, keyName, isJumpBtn = false) {
+    const btn = document.getElementById(id);
+    
+    // 手指按下
+    const startAction = (e) => {
+        e.preventDefault(); // 防止選取文字或放大
+        keys[keyName] = true;
+        btn.classList.add('active');
+        if (isJumpBtn) triggerGameStart();
+    };
+
+    // 手指放開
+    const endAction = (e) => {
+        e.preventDefault();
+        keys[keyName] = false;
+        btn.classList.remove('active');
+    };
+
+    btn.addEventListener('touchstart', startAction, {passive: false});
+    btn.addEventListener('touchend', endAction, {passive: false});
+    
+    // 為了方便電腦用滑鼠測試，也加上滑鼠事件
+    btn.addEventListener('mousedown', startAction);
+    btn.addEventListener('mouseup', endAction);
+    btn.addEventListener('mouseleave', endAction);
+}
+
+setupTouchButton('btnLeft', 'left');
+setupTouchButton('btnRight', 'right');
+setupTouchButton('btnJump', 'up', true);
+
+
+// --- 類別定義 (與之前相同) ---
+class Player {
+    constructor() {
+        this.width = 40; this.height = 60;
+        this.x = 100; this.y = 200; this.vy = 0; this.jumpPower = 12;
+        this.grounded = false; this.invincible = false; this.invincibleTimer = 0;
+        this.image = images.leo;
+    }
+    draw() {
+        if (this.invincible) ctx.globalAlpha = (frames % 10 < 5) ? 0.5 : 1.0;
+        ctx.drawImage(this.image, this.x, this.y);
+        ctx.globalAlpha = 1.0;
+        ctx.fillStyle = 'white'; ctx.font = '14px Arial'; ctx.fillText("里歐", this.x + 5, this.y - 10);
+        if (this.invincible) {
+            ctx.fillStyle = 'gold'; ctx.fillRect(this.x, this.y - 25, this.width * (this.invincibleTimer / 600), 5);
+        }
+    }
+    update() {
+        if (keys.up && this.grounded) { this.vy = -this.jumpPower; this.grounded = false; }
+        if (keys.right && this.x < canvas.width / 2) this.x += 3;
+        if (keys.left && this.x > 0) this.x -= 3;
+        this.y += this.vy;
+        if (!this.grounded) { this.vy += gravity; } else { this.vy = 0; }
+        if (this.y + this.height >= canvas.height - 50) {
+            this.y = canvas.height - 50 - this.height; this.grounded = true;
+        } else { this.grounded = false; }
+        if (this.invincible) {
+            this.invincibleTimer--;
+            if (this.invincibleTimer <= 0) this.invincible = false;
+        }
+    }
+}
+
+class Enemy {
+    constructor(type) {
+        this.x = canvas.width + Math.random() * 200;
+        this.markedForDeletion = false; this.type = type;
+        if (this.type === 'Richard') {
+            this.image = images.richard; this.width = this.image.width; this.height = this.image.height;
+            this.speed = gameSpeed; this.name = "理查哥"; this.y = canvas.height - 50 - this.height;
+        } else if (this.type === 'Ping') {
+            this.image = images.ping; this.width = this.image.width; this.height = this.image.height;
+            this.speed = gameSpeed * 0.5; this.name = "平老大";
+            this.y = canvas.height - 50 - this.height; this.vy = 0; this.jumpTimer = 0; this.throwTimer = 0;
+        } else if (this.type === 'Luo') {
+            this.image = images.luo; this.width = this.image.width; this.height = this.image.height;
+            this.speed = gameSpeed * 2.5; this.name = "螺鴿"; this.y = canvas.height - 50 - this.height;
+        }
+    }
+    draw() { ctx.drawImage(this.image, this.x, this.y); ctx.fillStyle = 'white'; ctx.font = '12px Arial'; ctx.fillText(this.name, this.x, this.y - 5); }
+    update() {
+        this.x -= this.speed;
+        if (this.type === 'Ping') {
+            this.jumpTimer++;
+            if (this.jumpTimer > 100) { if (this.y >= canvas.height - 50 - this.height) this.vy = -10; this.jumpTimer = 0; }
+            this.y += this.vy;
+            if (this.y < canvas.height - 50 - this.height) this.vy += gravity; else { this.y = canvas.height - 50 - this.height; this.vy = 0; }
+            this.throwTimer++;
+            if (this.throwTimer > 150) { projectiles.push(new Projectile(this.x, this.y + 10)); this.throwTimer = 0; }
+        }
+        if (this.x + this.width < 0) this.markedForDeletion = true;
+    }
+}
+
+class Projectile {
+    constructor(x, y) {
+        this.x = x; this.y = y; this.image = images.bread; this.width = 30; this.height = 30; this.speed = 5; this.markedForDeletion = false;
+    }
+    draw() { ctx.drawImage(this.image, this.x, this.y); ctx.fillStyle = 'black'; ctx.font = '10px Arial'; ctx.fillText("麵包", this.x, this.y-5); }
+    update() { this.x -= (this.speed + gameSpeed * 0.5); if (this.x < 0) this.markedForDeletion = true; }
+}
+
+class HeDong {
+    constructor() {
+        this.image = images.hedong; this.width = this.image.width; this.height = this.image.height;
+        this.x = canvas.width; this.y = 50 + Math.random() * 100; this.speed = 2; this.markedForDeletion = false; this.hasDropped = false;
+    }
+    draw() { ctx.drawImage(this.image, this.x, this.y); ctx.fillStyle = 'white'; ctx.fillText("河董", this.x + 10, this.y - 5); }
+    update() {
+        this.x -= this.speed;
+        if (!this.hasDropped && this.x < canvas.width * 0.8 && Math.random() < 0.02) { items.push(new Rice(this.x + 20, this.y + 40)); this.hasDropped = true; }
+        if (this.x + this.width < 0) this.markedForDeletion = true;
+    }
+}
+
+class Rice {
+    constructor(x, y) {
+        this.x = x; this.y = y; this.image = images.rice; this.width = 30; this.height = 30; this.markedForDeletion = false; this.vy = 0;
+    }
+    draw() { ctx.drawImage(this.image, this.x, this.y); ctx.fillStyle = 'white'; ctx.font = '10px Arial'; ctx.fillText("滷肉飯", this.x-2, this.y-5); }
+    update() {
+        this.y += this.vy; this.vy += gravity;
+        if (this.y + this.height >= canvas.height - 50) { this.y = canvas.height - 50 - this.height; this.vy = 0; this.x -= gameSpeed; }
+        if (this.x + this.width < 0) this.markedForDeletion = true;
+    }
+}
+
+class Background {
+    update() {
+        ctx.fillStyle = '#654321'; ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+        ctx.fillStyle = '#32CD32'; ctx.fillRect(0, canvas.height - 60, canvas.width, 10);
+    }
+}
+
+let player = new Player();
+let enemies = [], projectiles = [], heDongs = [], items = [];
+let background = new Background();
+
+function resetGame() {
+    player = new Player(); enemies = []; projectiles = []; heDongs = []; items = [];
+    score = 0; frames = 0; gameSpeed = 4; isGameOver = false;
+    animate();
+}
+
+function handleEnemies() {
+    if (frames % 120 === 0) {
+        let rand = Math.random();
+        if (rand < 0.5) enemies.push(new Enemy('Richard')); else if (rand < 0.8) enemies.push(new Enemy('Ping')); else enemies.push(new Enemy('Luo'));
+    }
+    if (frames % 400 === 0 && Math.random() < 0.7) heDongs.push(new HeDong());
+
+    enemies.forEach((enemy, index) => {
+        enemy.draw(); enemy.update();
+        if (collision(player, enemy)) {
+            if (player.vy > 0 && player.y + player.height < enemy.y + enemy.height * 0.8) { enemies.splice(index, 1); player.vy = -8; score += 100; }
+            else { if (player.invincible) enemies.splice(index, 1); else isGameOver = true; }
+        }
+        if (enemy.markedForDeletion) enemies.splice(index, 1);
+    });
+    projectiles.forEach((p, index) => {
+        p.draw(); p.update();
+        if (collision(player, p)) { if (!player.invincible) isGameOver = true; else projectiles.splice(index, 1); }
+        if (p.markedForDeletion) projectiles.splice(index, 1);
+    });
+    heDongs.forEach((h, index) => { h.draw(); h.update(); if (h.markedForDeletion) heDongs.splice(index, 1); });
+    items.forEach((item, index) => {
+        item.draw(); item.update();
+        if (collision(player, item)) { player.invincible = true; player.invincibleTimer = 600; items.splice(index, 1); }
+        if (item.markedForDeletion) items.splice(index, 1);
+    });
+}
+
+function collision(rect1, rect2) {
+    return (rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x &&
+            rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y);
+}
+
+function drawScore() {
+    ctx.fillStyle = 'black'; ctx.font = '20px Arial'; ctx.fillText('距離分數: ' + Math.floor(score), 20, 30);
+    if (player.invincible) { ctx.fillStyle = 'red'; ctx.fillText('無敵時間! 剩餘: ' + Math.floor(player.invincibleTimer/60), 20, 60); }
+}
+
+function drawStartScreen() {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+    ctx.font = '40px Microsoft JhengHei'; ctx.fillText('滷肉大冒險', canvas.width/2, canvas.height/2 - 50);
+    ctx.font = '20px Microsoft JhengHei'; ctx.fillText('按 跳躍鍵 開始遊戲', canvas.width/2, canvas.height/2 + 20);
+    ctx.textAlign = 'start';
+}
+
+function drawGameOverScreen() {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+    ctx.font = '40px Microsoft JhengHei'; ctx.fillText('遊戲結束 你已被離職', canvas.width/2, canvas.height/2 - 20);
+    ctx.font = '30px Microsoft JhengHei'; ctx.fillText('最終分數: ' + Math.floor(score), canvas.width/2, canvas.height/2 + 30);
+    ctx.fillStyle = 'yellow'; ctx.font = '25px Microsoft JhengHei'; ctx.fillText('按 跳躍鍵 重新開始', canvas.width/2, canvas.height/2 + 80);
+    ctx.textAlign = 'start';
+}
+
+function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    background.update();
+    player.update(); player.draw();
+    handleEnemies();
+    score += 0.1; gameSpeed += 0.001; frames++;
+    drawScore();
+    if (isGameOver) drawGameOverScreen(); else requestAnimationFrame(animate);
+}
+
+// 初始化
+background.update();
+drawStartScreen();
+
+</script>
+</body>
+</html>
