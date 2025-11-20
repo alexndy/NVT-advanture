@@ -3,34 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>滷肉大冒險 - 手機版</title>
+    <title>滷肉大冒險 - 伯輪結界版</title>
     <style>
         body {
             margin: 0;
-            display: flex;
-            flex-direction: column; /* 改成直向排列 (畫在上，按鈕在下) */
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            height: 100dvh;
             background-color: #222;
             font-family: "Microsoft JhengHei", sans-serif;
             overflow: hidden;
-            touch-action: none; /* 防止手機遊覽器預設的縮放或捲動 */
+            touch-action: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         
-        /* 畫布自適應 */
+        #game-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
         canvas {
             background-color: #87CEEB;
             border: 2px solid #fff;
-            /* 讓畫布寬度跟隨螢幕，但不超過800px */
-            width: 95%; 
+            width: 95%;
             max-width: 800px;
-            height: auto; /* 高度依比例縮放 */
-            aspect-ratio: 16/9; /* 維持比例 */
-            display: block;
+            height: auto;
+            max-height: 65vh; /* 確保按鈕有空間 */
+            aspect-ratio: 16/9;
+            object-fit: contain;
         }
 
-        /* 控制區塊 */
         #controls {
             display: flex;
             justify-content: space-between;
@@ -38,12 +44,12 @@
             max-width: 800px;
             margin-top: 10px;
             padding-bottom: 10px;
+            flex-shrink: 0;
         }
 
-        /* 按鈕樣式 */
         .btn-group {
             display: flex;
-            gap: 15px;
+            gap: 10px;
         }
 
         button {
@@ -51,12 +57,12 @@
             color: white;
             border: 2px solid white;
             border-radius: 15px;
-            font-size: 24px;
-            padding: 15px;
-            min-width: 80px;
-            height: 80px; /* 讓按鈕夠大好按 */
+            font-size: 20px;
+            padding: 10px;
+            min-width: 70px;
+            height: 70px;
             cursor: pointer;
-            user-select: none; /* 防止長按選取文字 */
+            user-select: none;
             -webkit-user-select: none;
             touch-action: manipulation;
         }
@@ -65,32 +71,57 @@
             background-color: rgba(255, 255, 255, 0.6);
             color: black;
         }
+
+        @media (orientation: landscape) and (max-height: 500px) {
+            button { height: 50px; font-size: 16px; min-width: 60px; }
+            canvas { max-height: 60vh; }
+        }
     </style>
 </head>
 <body>
 
-<canvas id="gameCanvas" width="800" height="450"></canvas>
-
-<div id="controls">
-    <div class="btn-group">
-        <button id="btnLeft">◀ 左</button>
-        <button id="btnRight">右 ▶</button>
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+    <div id="controls">
+        <div class="btn-group">
+            <button id="btnLeft">◀</button>
+            <button id="btnRight">▶</button>
+        </div>
+        <button id="btnJump" style="background-color: rgba(255, 215, 0, 0.3);">跳躍/開始</button>
     </div>
-    <button id="btnJump" style="background-color: rgba(255, 215, 0, 0.3);">跳躍 / 開始</button>
 </div>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// --- 圖片產生器 (維持原樣) ---
+// --- 圖片產生器 ---
 function createCharacterSprite(color, width, height, type) {
     const c = document.createElement('canvas');
     c.width = width; c.height = height;
     const x = c.getContext('2d');
+    
+    // 身體
     x.fillStyle = color; x.fillRect(5, 20, width - 10, height - 20);
+    
+    // 頭
     x.fillStyle = '#FFCC99'; x.beginPath(); x.arc(width/2, 15, 12, 0, Math.PI * 2); x.fill();
-    x.fillStyle = 'black'; x.fillRect(width/2 - 4, 12, 2, 2); x.fillRect(width/2 + 2, 12, 2, 2);
+
+    // 臉部特徵
+    if (type === 'bolun') {
+        // 伯輪：瞇瞇眼
+        x.strokeStyle = 'black'; x.lineWidth = 2;
+        x.beginPath(); x.moveTo(width/2 - 6, 15); x.lineTo(width/2 - 2, 15); x.stroke();
+        x.beginPath(); x.moveTo(width/2 + 2, 15); x.lineTo(width/2 + 6, 15); x.stroke();
+        // 睡帽
+        x.fillStyle = '#4682B4'; // 鋼藍色睡帽
+        x.beginPath(); x.moveTo(width/2 - 12, 8); x.lineTo(width/2 + 12, 8); x.lineTo(width/2, -12); x.fill();
+        // 鼻涕泡泡 (睡得很香)
+        x.strokeStyle = 'rgba(255,255,255,0.8)'; x.lineWidth = 1;
+        x.beginPath(); x.arc(width/2 + 4, 18, 4, 0, Math.PI*2); x.stroke();
+    } else {
+        x.fillStyle = 'black'; x.fillRect(width/2 - 4, 12, 2, 2); x.fillRect(width/2 + 2, 12, 2, 2);
+    }
 
     if (type === 'leo') {
         x.fillStyle = 'blue'; x.fillRect(width/2 - 14, 2, 28, 6);
@@ -126,6 +157,7 @@ const images = {
     ping: createCharacterSprite('#228B22', 50, 50, 'ping'),
     luo: createCharacterSprite('#800080', 30, 40, 'luo'),
     hedong: createCharacterSprite('#00CED1', 50, 50, 'hedong'),
+    bolun: createCharacterSprite('#B0C4DE', 50, 55, 'bolun'),
     bread: createItemSprite('bread'),
     rice: createItemSprite('rice')
 };
@@ -137,10 +169,10 @@ let gameSpeed = 4;
 let isGameOver = false;
 let isGameStart = false;
 let gravity = 0.6;
+let flashEffectTimer = 0; // 登場閃光特效計時
 
 const keys = { right: false, left: false, up: false };
 
-// 統一處理「開始遊戲」的邏輯
 function triggerGameStart() {
     if (!isGameStart) {
         isGameStart = true;
@@ -150,54 +182,33 @@ function triggerGameStart() {
     }
 }
 
-// 電腦鍵盤監聽
 window.addEventListener('keydown', function(e) {
     if (e.code === 'ArrowRight') keys.right = true;
     if (e.code === 'ArrowLeft') keys.left = true;
     if (e.code === 'Space' || e.code === 'ArrowUp') keys.up = true;
     if (e.code === 'Space' || e.code === 'Enter') triggerGameStart();
 });
-
 window.addEventListener('keyup', function(e) {
     if (e.code === 'ArrowRight') keys.right = false;
     if (e.code === 'ArrowLeft') keys.left = false;
     if (e.code === 'Space' || e.code === 'ArrowUp') keys.up = false;
 });
 
-// --- 手機觸控按鈕邏輯 ---
 function setupTouchButton(id, keyName, isJumpBtn = false) {
     const btn = document.getElementById(id);
-    
-    // 手指按下
-    const startAction = (e) => {
-        e.preventDefault(); // 防止選取文字或放大
-        keys[keyName] = true;
-        btn.classList.add('active');
-        if (isJumpBtn) triggerGameStart();
-    };
-
-    // 手指放開
-    const endAction = (e) => {
-        e.preventDefault();
-        keys[keyName] = false;
-        btn.classList.remove('active');
-    };
-
+    const startAction = (e) => { e.preventDefault(); keys[keyName] = true; btn.classList.add('active'); if (isJumpBtn) triggerGameStart(); };
+    const endAction = (e) => { e.preventDefault(); keys[keyName] = false; btn.classList.remove('active'); };
     btn.addEventListener('touchstart', startAction, {passive: false});
     btn.addEventListener('touchend', endAction, {passive: false});
-    
-    // 為了方便電腦用滑鼠測試，也加上滑鼠事件
     btn.addEventListener('mousedown', startAction);
     btn.addEventListener('mouseup', endAction);
     btn.addEventListener('mouseleave', endAction);
 }
-
 setupTouchButton('btnLeft', 'left');
 setupTouchButton('btnRight', 'right');
 setupTouchButton('btnJump', 'up', true);
 
-
-// --- 類別定義 (與之前相同) ---
+// --- 類別定義 ---
 class Player {
     constructor() {
         this.width = 40; this.height = 60;
@@ -223,10 +234,7 @@ class Player {
         if (this.y + this.height >= canvas.height - 50) {
             this.y = canvas.height - 50 - this.height; this.grounded = true;
         } else { this.grounded = false; }
-        if (this.invincible) {
-            this.invincibleTimer--;
-            if (this.invincibleTimer <= 0) this.invincible = false;
-        }
+        if (this.invincible) { this.invincibleTimer--; if (this.invincibleTimer <= 0) this.invincible = false; }
     }
 }
 
@@ -243,7 +251,7 @@ class Enemy {
             this.y = canvas.height - 50 - this.height; this.vy = 0; this.jumpTimer = 0; this.throwTimer = 0;
         } else if (this.type === 'Luo') {
             this.image = images.luo; this.width = this.image.width; this.height = this.image.height;
-            this.speed = gameSpeed * 2.5; this.name = "螺鴿"; this.y = canvas.height - 50 - this.height;
+            this.speed = gameSpeed * 2; this.name = "螺鴿"; this.y = canvas.height - 50 - this.height;
         }
     }
     draw() { ctx.drawImage(this.image, this.x, this.y); ctx.fillStyle = 'white'; ctx.font = '12px Arial'; ctx.fillText(this.name, this.x, this.y - 5); }
@@ -282,6 +290,52 @@ class HeDong {
     }
 }
 
+// 伯輪：超級稀有角色
+class BoLun {
+    constructor() {
+        this.image = images.bolun;
+        this.width = this.image.width; this.height = this.image.height;
+        this.x = canvas.width / 2 - this.width / 2; // 出現在畫面中間
+        this.y = -100; // 從上面掉下來
+        this.targetY = 100; // 停在空中的位置
+        this.lifeTimer = 600; // 存在 10 秒 (60fps * 10)
+        this.markedForDeletion = false;
+        this.state = 'entering'; // entering, staying, leaving
+    }
+    draw() {
+        ctx.drawImage(this.image, this.x, this.y);
+        // 名字修正
+        ctx.fillStyle = '#87CEFA'; ctx.font = 'bold 16px Arial';
+        ctx.fillText("伯輪", this.x + 10, this.y - 10);
+    }
+    update() {
+        this.lifeTimer--;
+
+        // 動作邏輯
+        if (this.state === 'entering') {
+            // 緩緩降落
+            if (this.y < this.targetY) {
+                this.y += 4;
+            } else {
+                this.state = 'staying';
+            }
+        } else if (this.state === 'staying') {
+            // 輕微浮動
+            this.y = this.targetY + Math.sin(frames * 0.05) * 10;
+            if (this.lifeTimer < 60) { // 最後1秒準備離開
+                this.state = 'leaving';
+            }
+        } else if (this.state === 'leaving') {
+            // 往上飛走
+            this.y -= 5;
+        }
+
+        if (this.lifeTimer <= 0) {
+            this.markedForDeletion = true;
+        }
+    }
+}
+
 class Rice {
     constructor(x, y) {
         this.x = x; this.y = y; this.image = images.rice; this.width = 30; this.height = 30; this.markedForDeletion = false; this.vy = 0;
@@ -302,38 +356,84 @@ class Background {
 }
 
 let player = new Player();
-let enemies = [], projectiles = [], heDongs = [], items = [];
+let enemies = [], projectiles = [], heDongs = [], boLuns = [], items = [];
 let background = new Background();
 
 function resetGame() {
-    player = new Player(); enemies = []; projectiles = []; heDongs = []; items = [];
-    score = 0; frames = 0; gameSpeed = 4; isGameOver = false;
+    player = new Player(); enemies = []; projectiles = []; heDongs = []; boLuns = []; items = [];
+    score = 0; frames = 0; gameSpeed = 4; isGameOver = false; flashEffectTimer = 0;
     animate();
 }
 
 function handleEnemies() {
-    if (frames % 120 === 0) {
-        let rand = Math.random();
-        if (rand < 0.5) enemies.push(new Enemy('Richard')); else if (rand < 0.8) enemies.push(new Enemy('Ping')); else enemies.push(new Enemy('Luo'));
-    }
-    if (frames % 400 === 0 && Math.random() < 0.7) heDongs.push(new HeDong());
+    // 檢查伯輪是否存在
+    const isTimeFrozen = boLuns.length > 0;
 
+    // 登場閃光效果
+    if (isTimeFrozen && boLuns[0].lifeTimer > 580) {
+        flashEffectTimer = 10;
+    }
+
+    // 只有在沒凍結時才生成新敵人
+    if (!isTimeFrozen) {
+        if (frames % 120 === 0) {
+            let rand = Math.random();
+            if (rand < 0.5) enemies.push(new Enemy('Richard')); else if (rand < 0.8) enemies.push(new Enemy('Ping')); else enemies.push(new Enemy('Luo'));
+        }
+        if (frames % 400 === 0 && Math.random() < 0.6) heDongs.push(new HeDong());
+        
+        // 伯輪生成 (機率極低)
+        if (frames % 500 === 0 && Math.random() < 0.3) boLuns.push(new BoLun());
+    }
+
+    // 處理敵人
     enemies.forEach((enemy, index) => {
-        enemy.draw(); enemy.update();
+        enemy.draw();
+        // 只有沒凍結時才移動
+        if (!isTimeFrozen) enemy.update();
+
         if (collision(player, enemy)) {
-            if (player.vy > 0 && player.y + player.height < enemy.y + enemy.height * 0.8) { enemies.splice(index, 1); player.vy = -8; score += 100; }
-            else { if (player.invincible) enemies.splice(index, 1); else isGameOver = true; }
+            // 如果凍結中，碰到敵人直接踩死，不會受傷
+            if (isTimeFrozen || (player.vy > 0 && player.y + player.height < enemy.y + enemy.height * 0.8)) {
+                enemies.splice(index, 1); player.vy = -8; score += 100;
+            } else {
+                if (player.invincible) enemies.splice(index, 1); else isGameOver = true;
+            }
         }
         if (enemy.markedForDeletion) enemies.splice(index, 1);
     });
+
+    // 處理麵包
     projectiles.forEach((p, index) => {
-        p.draw(); p.update();
-        if (collision(player, p)) { if (!player.invincible) isGameOver = true; else projectiles.splice(index, 1); }
+        p.draw();
+        if (!isTimeFrozen) p.update();
+
+        if (collision(player, p)) {
+            // 凍結時麵包無害
+            if (!isTimeFrozen && !player.invincible) isGameOver = true;
+            else if (player.invincible || isTimeFrozen) projectiles.splice(index, 1);
+        }
         if (p.markedForDeletion) projectiles.splice(index, 1);
     });
-    heDongs.forEach((h, index) => { h.draw(); h.update(); if (h.markedForDeletion) heDongs.splice(index, 1); });
+
+    // 處理河董
+    heDongs.forEach((h, index) => {
+        h.draw();
+        if (!isTimeFrozen) h.update();
+        if (h.markedForDeletion) heDongs.splice(index, 1);
+    });
+
+    // 處理伯輪 (他不受時間凍結影響)
+    boLuns.forEach((b, index) => {
+        b.draw();
+        b.update();
+        if (b.markedForDeletion) boLuns.splice(index, 1);
+    });
+
+    // 處理道具
     items.forEach((item, index) => {
-        item.draw(); item.update();
+        item.draw();
+        if (!isTimeFrozen) item.update(); // 滷肉飯懸浮
         if (collision(player, item)) { player.invincible = true; player.invincibleTimer = 600; items.splice(index, 1); }
         if (item.markedForDeletion) items.splice(index, 1);
     });
@@ -347,6 +447,14 @@ function collision(rect1, rect2) {
 function drawScore() {
     ctx.fillStyle = 'black'; ctx.font = '20px Arial'; ctx.fillText('距離分數: ' + Math.floor(score), 20, 30);
     if (player.invincible) { ctx.fillStyle = 'red'; ctx.fillText('無敵時間! 剩餘: ' + Math.floor(player.invincibleTimer/60), 20, 60); }
+    
+    // 伯輪結界文字
+    if (boLuns.length > 0) {
+        ctx.fillStyle = '#AFEEEE'; 
+        ctx.font = 'bold 24px Arial';
+        ctx.fillText('伯輪結界: 時間凍結中!', 250, 60);
+        ctx.fillText((Math.ceil(boLuns[0].lifeTimer/60)) + "s", 250, 90);
+    }
 }
 
 function drawStartScreen() {
@@ -360,7 +468,7 @@ function drawStartScreen() {
 function drawGameOverScreen() {
     ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = 'white'; ctx.textAlign = 'center';
-    ctx.font = '40px Microsoft JhengHei'; ctx.fillText('遊戲結束 你已被離職', canvas.width/2, canvas.height/2 - 20);
+    ctx.font = '40px Microsoft JhengHei'; ctx.fillText('遊戲結束', canvas.width/2, canvas.height/2 - 20);
     ctx.font = '30px Microsoft JhengHei'; ctx.fillText('最終分數: ' + Math.floor(score), canvas.width/2, canvas.height/2 + 30);
     ctx.fillStyle = 'yellow'; ctx.font = '25px Microsoft JhengHei'; ctx.fillText('按 跳躍鍵 重新開始', canvas.width/2, canvas.height/2 + 80);
     ctx.textAlign = 'start';
@@ -368,15 +476,40 @@ function drawGameOverScreen() {
 
 function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 伯輪結界特效：背景變深藍色
+    if (boLuns.length > 0) {
+        ctx.fillStyle = '#191970'; // 深夜藍
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // 畫一些星星
+        ctx.fillStyle = 'white';
+        for(let i=0; i<20; i++) {
+            ctx.fillRect((frames * i * 13) % canvas.width, (i * 20) % 300, 2, 2);
+        }
+    }
+
     background.update();
     player.update(); player.draw();
     handleEnemies();
-    score += 0.1; gameSpeed += 0.001; frames++;
+    
+    // 閃光特效
+    if (flashEffectTimer > 0) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${flashEffectTimer/10})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        flashEffectTimer--;
+    }
+
+    score += 0.1; 
+    // 只有在沒凍結時遊戲才會變快
+    if (boLuns.length === 0) {
+        gameSpeed += 0.001; 
+    }
+    
+    frames++;
     drawScore();
     if (isGameOver) drawGameOverScreen(); else requestAnimationFrame(animate);
 }
 
-// 初始化
 background.update();
 drawStartScreen();
 
